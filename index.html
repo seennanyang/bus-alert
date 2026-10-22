@@ -1,2 +1,253 @@
-# bus-alert
-A web-based app showing and tracking bus arrival time.
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E2A2F">
+<title>Bus Alert</title>
+<style>
+:root{--ink:#0E2A2F;--paper:#F7F5EE;--amber:#FFC93C;--coral:#FF6B4A;--scale:1}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{font-size:calc(100% * var(--scale))}
+html,body{height:100%;margin:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Sans SC","Noto Sans Tamil",sans-serif;color:var(--paper);background:var(--ink);overflow:hidden}
+button,input{font:inherit}
+#bg{position:fixed;inset:0;background:radial-gradient(circle at 80% 14%,#ffd98a 0,#f59e5b 16%,transparent 38%),linear-gradient(180deg,#1d4e5f 0%,#2e7a72 55%,#0e2a2f 100%);background-size:cover;background-position:center}
+#bg::after{content:"";position:absolute;inset:0;background:rgba(8,24,28,.5)}
+#app{position:relative;height:100dvh;display:flex;flex-direction:column;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);overflow-y:auto}
+.clock{text-align:center}
+.time{font-size:clamp(3rem,17vw,5.5rem);font-weight:800;line-height:1.05;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.date{font-size:1.3rem;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.cards{flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.card{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px;padding:14px 18px;border-radius:20px;border:4px solid var(--amber);background:rgba(8,24,28,.82)}
+.no{font-size:3.4rem;font-weight:800;color:var(--amber);line-height:1}
+.eta{text-align:right}
+.eta b{font-size:3.6rem;line-height:1;font-weight:800}
+.eta span{font-size:1.4rem;font-weight:700;margin-left:6px}
+.eta .arr{font-size:2rem;font-weight:800}
+.next{font-size:1.2rem;opacity:.9;margin-top:4px}
+.card.alert{background:var(--coral);border-color:#fff;color:#1a0a05;animation:pulse 1.2s ease-in-out infinite}
+.card.alert .no{color:#1a0a05}
+@keyframes pulse{50%{transform:scale(1.025)}}
+@media (prefers-reduced-motion:reduce){.card.alert{animation:none}}
+.msg{text-align:center;font-size:1.4rem;padding:18px;border-radius:20px;background:rgba(8,24,28,.82);border:3px solid var(--paper)}
+.demo{text-align:center;font-size:1rem;opacity:.85}
+button{cursor:pointer;border:3px solid var(--paper);background:rgba(8,24,28,.85);color:var(--paper);border-radius:16px;min-height:60px;padding:8px 18px;font-weight:700;font-size:1.2rem}
+button:focus-visible,input:focus-visible{outline:4px solid var(--amber);outline-offset:2px}
+button.on,button.primary{background:var(--amber);color:#14110a;border-color:var(--amber)}
+#start{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(14,42,47,.92);padding:24px}
+#start button{font-size:2rem;min-height:120px;width:100%;max-width:420px;background:var(--amber);color:#14110a;border-color:var(--amber)}
+#set{position:fixed;inset:0;z-index:4;background:var(--ink);overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 16px) 18px 40px}
+#set h2{font-size:2rem;margin:0 0 8px}
+#set label{display:block;font-size:1.3rem;font-weight:700;margin:20px 0 8px;color:var(--amber)}
+#set input[type=text],#set input[type=tel]{width:100%;height:64px;font-size:1.8rem;font-weight:700;padding:0 14px;border-radius:14px;border:3px solid var(--paper);background:#fff;color:#111}
+#set input[type=range]{width:100%;height:44px;accent-color:var(--amber)}
+.hint{margin:6px 0 0;font-size:1.05rem;opacity:.85}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg.three{grid-template-columns:1fr 1fr 1fr}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+#done{width:100%;margin-top:28px;min-height:72px;font-size:1.5rem}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+
+<main id="app">
+  <div class="clock"><div class="time" id="time"></div><div class="date" id="date"></div></div>
+  <div class="cards" id="cards"></div>
+  <div class="demo" id="demo" hidden></div>
+  <button id="gear">&#9881; <span data-i="settings"></span></button>
+</main>
+
+<div id="start"><button id="go" data-i="start"></button></div>
+
+<section id="set" hidden>
+  <h2 data-i="settings"></h2>
+
+  <label data-i="lang"></label>
+  <div class="seg" data-k="lang">
+    <button data-v="en">English</button><button data-v="zh">中文</button>
+    <button data-v="ms">Bahasa Melayu</button><button data-v="ta">தமிழ்</button>
+  </div>
+
+  <label for="stop" data-i="stop"></label>
+  <input type="tel" id="stop" inputmode="numeric" maxlength="5" autocomplete="off">
+  <p class="hint" data-i="stopHint"></p>
+
+  <label for="b1" data-i="bus1"></label>
+  <input type="text" id="b1" maxlength="5" autocomplete="off" autocapitalize="characters">
+
+  <label data-i="buses"></label>
+  <div class="seg" data-k="two"><button data-v="0" data-i="one"></button><button data-v="1" data-i="two"></button></div>
+
+  <div id="b2w"><label for="b2" data-i="bus2"></label>
+  <input type="text" id="b2" maxlength="5" autocomplete="off" autocapitalize="characters"></div>
+
+  <label data-i="alertLbl"></label>
+  <div class="seg three" data-k="alert">
+    <button data-v="chime" data-i="chime"></button><button data-v="vib" data-i="vib"></button><button data-v="off" data-i="off"></button>
+  </div>
+  <p class="hint" data-i="vibNote"></p>
+
+  <label for="vol" data-i="vol"></label>
+  <input type="range" id="vol" min="0.1" max="1" step="0.05">
+  <button id="test" data-i="test"></button>
+
+  <label data-i="textsize"></label>
+  <div class="seg three" data-k="size">
+    <button data-v="1" data-i="sm"></button><button data-v="1.25" data-i="md"></button><button data-v="1.5" data-i="lg"></button>
+  </div>
+
+  <label data-i="wall"></label>
+  <div class="row"><button id="pick" data-i="photo"></button><button id="reset" data-i="reset"></button></div>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <button id="done" class="primary" data-i="done"></button>
+</section>
+
+<script>
+/* ===== Set this after you deploy the Cloudflare Worker (see worker.js). Leave empty for Demo mode. ===== */
+const API_URL = "";
+
+const K=['start','settings','done','lang','stop','stopHint','bus1','bus2','buses','one','two','alertLbl','chime','vib','off','vibNote','vol','test','textsize','sm','md','lg','wall','photo','reset','min','arr','next','err','setup','demo'];
+const L={
+en:['Tap to start','Settings','Done','Language','Bus stop number','5 digits, e.g. 83139','Bus number','Second bus number','Number of buses to track','1 bus','2 buses','Alert when bus is 5 minutes away','Chime','Vibration only','Off','Vibration works on Android phones only','Volume','Test alert','Text size','Small','Medium','Large','Wallpaper','Choose photo','Use default picture','min','Arriving','Next','No bus info','Tap Settings to choose your bus stop and bus','Demo mode (fast, not real timings)'],
+zh:['点击开始','设置','完成','语言','巴士站号码','5位数字，例如 83139','巴士号码','第二辆巴士号码','要追踪的巴士数量','1辆','2辆','巴士还有5分钟到达时提醒','铃声','仅震动','关闭','震动仅适用于安卓手机','音量','测试提醒','字体大小','小','中','大','壁纸','选择照片','使用默认图片','分钟','即将到站','下一班','没有巴士信息','点击“设置”选择巴士站和巴士号码','演示模式（快速，非真实时间）'],
+ms:['Ketik untuk mula','Tetapan','Selesai','Bahasa','Nombor perhentian bas','5 digit, cth. 83139','Nombor bas','Nombor bas kedua','Bilangan bas untuk dijejak','1 bas','2 bas','Beri amaran apabila bas 5 minit lagi','Loceng','Getaran sahaja','Mati','Getaran hanya berfungsi pada telefon Android','Kelantangan','Uji amaran','Saiz teks','Kecil','Sederhana','Besar','Kertas dinding','Pilih foto','Guna gambar asal','min','Tiba sebentar lagi','Seterusnya','Tiada maklumat bas','Ketik Tetapan untuk pilih perhentian dan bas anda','Mod demo (laju, bukan masa sebenar)'],
+ta:['தொடங்க தட்டவும்','அமைப்புகள்','முடிந்தது','மொழி','பேருந்து நிறுத்த எண்','5 இலக்கங்கள், எ.கா. 83139','பேருந்து எண்','இரண்டாவது பேருந்து எண்','கண்காணிக்கும் பேருந்துகள்','1 பேருந்து','2 பேருந்துகள்','பேருந்து 5 நிமிடத்தில் வரும்போது எச்சரிக்கை','மணி ஒலி','அதிர்வு மட்டும்','முடக்கு','அதிர்வு Android தொலைபேசிகளில் மட்டுமே வேலை செய்யும்','ஒலி அளவு','எச்சரிக்கையை சோதி','எழுத்து அளவு','சிறியது','நடுத்தரம்','பெரியது','வால்பேப்பர்','புகைப்படம் தேர்வு','இயல்புப் படம்','நிமி','இப்போது வருகிறது','அடுத்தது','பேருந்து தகவல் இல்லை','அமைப்புகளைத் தட்டி நிறுத்தத்தையும் பேருந்தையும் தேர்வு செய்யுங்கள்','டெமோ முறை (வேகமானது, உண்மை நேரம் அல்ல)']
+};
+const LOC={en:'en-SG',zh:'zh-SG',ms:'ms-SG',ta:'ta-SG'};
+const $=id=>document.getElementById(id);
+const t=k=>L[S.lang][K.indexOf(k)];
+
+const D={lang:'en',stop:'',b1:'',b2:'',two:false,alert:'chime',vol:0.6,size:1};
+let S={...D};
+try{S={...D,...JSON.parse(localStorage.getItem('busAlert')||'{}')}}catch(e){}
+const save=()=>{try{localStorage.setItem('busAlert',JSON.stringify(S))}catch(e){}};
+
+let started=false, ac=null, wl=null, arr={}, err=false, fired=[false,false], t0=Date.now(), lastKey='';
+
+/* ---------- language & settings UI ---------- */
+function applyLang(){
+  document.documentElement.lang=S.lang;
+  document.querySelectorAll('[data-i]').forEach(el=>el.textContent=t(el.dataset.i));
+  document.documentElement.style.setProperty('--scale',S.size);
+  $('b2w').hidden=!S.two;
+  document.querySelectorAll('.seg').forEach(sg=>{
+    const k=sg.dataset.k, cur=String(k==='two'?(S.two?1:0):S[k]);
+    sg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===cur));
+  });
+  $('demo').hidden=!!API_URL; $('demo').textContent=t('demo');
+  lastKey=''; clock(); render();
+}
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+  const k=b.parentElement.dataset.k, v=b.dataset.v;
+  S[k]= k==='two' ? v==='1' : k==='size' ? +v : v;
+  save(); applyLang();
+}));
+$('stop').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);S.stop=e.target.value;save();arr={};poll()});
+$('b1').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/\s/g,'');S.b1=e.target.value;save();fired=[false,false];render()});
+$('b2').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/\s/g,'');S.b2=e.target.value;save();fired=[false,false];render()});
+$('vol').addEventListener('input',e=>{S.vol=+e.target.value;save()});
+$('gear').onclick=()=>{$('stop').value=S.stop;$('b1').value=S.b1;$('b2').value=S.b2;$('vol').value=S.vol;$('set').hidden=false;$('set').scrollTop=0};
+$('done').onclick=()=>{$('set').hidden=true;poll();render()};
+$('test').onclick=()=>{unlock();ring(true)};
+
+/* ---------- start (needed so sound is allowed) & keep screen on ---------- */
+$('go').onclick=()=>{started=true;unlock();lock();$('start').hidden=true;poll()};
+async function lock(){try{wl=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(started&&document.visibilityState==='visible'){lock();poll()}});
+
+/* ---------- wallpaper (stays on this phone only) ---------- */
+function setBg(url){$('bg').style.backgroundImage=url?`url(${url})`:''}
+try{const u=localStorage.getItem('busAlertBg');if(u)setBg(u)}catch(e){}
+$('pick').onclick=()=>$('file').click();
+$('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const img=new Image(), url=URL.createObjectURL(f);
+  img.onload=()=>{
+    const m=1280, r=Math.min(1,m/Math.max(img.width,img.height)), c=document.createElement('canvas');
+    c.width=Math.round(img.width*r); c.height=Math.round(img.height*r);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const d=c.toDataURL('image/jpeg',.8); setBg(d);
+    try{localStorage.setItem('busAlertBg',d)}catch(x){}
+    URL.revokeObjectURL(url);
+  };
+  img.src=url; e.target.value='';
+};
+$('reset').onclick=()=>{setBg('');try{localStorage.removeItem('busAlertBg')}catch(e){}};
+
+/* ---------- clock ---------- */
+function clock(){
+  const n=new Date(), loc=LOC[S.lang];
+  const tm=new Intl.DateTimeFormat(loc,{hour:'numeric',minute:'2-digit',hour12:true}).format(n);
+  const dt=new Intl.DateTimeFormat(loc,{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(n);
+  if(tm+dt!==lastKey){lastKey=tm+dt;$('time').textContent=tm;$('date').textContent=dt}
+}
+
+/* ---------- bus data ---------- */
+async function poll(){
+  if(!API_URL||!/^\d{5}$/.test(S.stop))return;
+  try{
+    const r=await fetch(API_URL+'?stop='+S.stop); if(!r.ok)throw 0;
+    const j=await r.json(); arr={};
+    (j.Services||[]).forEach(s=>{arr[s.ServiceNo]=[s.NextBus,s.NextBus2].map(b=>b&&b.EstimatedArrival?Date.parse(b.EstimatedArrival):null)});
+    err=false;
+  }catch(e){err=true}
+}
+setInterval(()=>{if(started)poll()},30000);
+
+function mins(bus,i){
+  if(!API_URL){ // demo: time runs 10x faster so the alert can be tested quickly
+    const e=(Date.now()-t0)/1000*10, rem=(((i?780:420)-e)%900+900)%900, m=Math.floor(rem/60);
+    return [m,m+15];
+  }
+  const a=arr[bus]; if(!a)return null;
+  const m=a.filter(x=>x!==null).map(x=>Math.floor((x-Date.now())/60000)).filter(x=>x>=-1);
+  return m.length?m:null;
+}
+const buses=()=>[S.b1,S.two?S.b2:''].map((b,i)=>({b,i})).filter(x=>x.b);
+
+function render(){
+  const box=$('cards'); box.innerHTML='';
+  const list=buses();
+  if(!list.length){box.innerHTML=`<div class="msg">${t('setup')}</div>`;return}
+  list.forEach(({b,i})=>{
+    const m=mins(b,i), d=document.createElement('div');
+    d.className='card'+(m&&m[0]<=5?' alert':'');
+    const eta=!m?`<span class="arr" style="margin:0">${t('err')}</span>`
+      :m[0]<=0?`<span class="arr" style="margin:0">${t('arr')}</span>`
+      :`<b>${m[0]}</b><span>${t('min')}</span>`;
+    const nx=m&&m[1]!=null&&m[1]>0?`<div class="next">${t('next')}: ${m[1]} ${t('min')}</div>`:'';
+    d.innerHTML=`<div class="no">${b}</div><div class="eta">${eta}${nx}</div>`;
+    box.appendChild(d);
+  });
+}
+
+/* ---------- alert ---------- */
+function unlock(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}}
+function note(f,at,v){
+  const o=ac.createOscillator(),g=ac.createGain(),n=ac.currentTime+at;
+  o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);
+  g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(v,n+.04);g.gain.exponentialRampToValueAtTime(.0001,n+1.3);
+  o.start(n);o.stop(n+1.4);
+}
+function ring(test){
+  if(S.alert==='chime'&&ac){[0,2.2,4.4].forEach(d=>[659,784,988].forEach((f,i)=>note(f,d+i*.3,S.vol*.5)))}
+  if(S.alert==='vib'&&navigator.vibrate){navigator.vibrate([500,250,500,250,500,250,500])}
+}
+function tick(){
+  clock();
+  buses().forEach(({b,i})=>{
+    const m=mins(b,i), m1=m?m[0]:null;
+    if(m1!==null&&m1<=5&&m1>=0&&!fired[i]){fired[i]=true;if(started)ring()}
+    else if(m1===null||m1>6)fired[i]=false;
+  });
+  render();
+}
+setInterval(tick,1000);
+applyLang();
+</script>
+</body>
+</html>
